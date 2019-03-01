@@ -44,33 +44,49 @@ TextWriter::TextWriter(int in_x, int in_y, Renderer &in_renderer,
   point_size = size;
 
   if (font_size_lookup[size] == 0) {
+    fprintf(stderr, "--- [New Font] for size %u\n", size);
+
     int list_start = glGenLists(128);
     Pango::FontDescription *font_desc = NULL;
     Glib::RefPtr<Pango::Font> ret;
 
     // Try to get the requested name first
+    fprintf(stderr, "Font: (1) try the requested font: `%s`\n", fontname.c_str());
     font_desc = new Pango::FontDescription(STRING(fontname << " " << in_size));
     ret = Gdk::GL::Font::use_pango_font(*font_desc, 0, 128, list_start);
+    fprintf(stderr, "Font: (1) pango %s\n", ret ? "success" : "failure");
 
     if (!ret) {
+      fprintf(stderr, "\n");
       delete font_desc;
       font_desc = NULL;
       // Get font from user settings
       const std::string userfontname = UserSetting::Get("font_desc", "");
       if (!userfontname.empty()) {
+        fprintf(stderr, "Font: (2) try the font from Gconf settings: `%s`\n", userfontname.c_str());
         font_desc = new Pango::FontDescription(STRING(userfontname << " " << in_size));
         ret = Gdk::GL::Font::use_pango_font(*font_desc, 0, 128, list_start);
+        fprintf(stderr, "Font: (2) pango %s\n", ret ? "success" : "failure");
+      }
+      else {
+        fprintf(stderr, "Font: (2) no font is defined in Gconf, cannot try\n");
       }
     }
 
     if (!ret) {
+      fprintf(stderr, "\n");
       delete font_desc;
       font_desc = NULL;
       // Get font from system settings
       const std::string sysfontname = get_default_font();
       if (!sysfontname.empty()) {
+        fprintf(stderr, "Font: (3) try the default system font: `%s`\n", sysfontname.c_str());
         font_desc = new Pango::FontDescription(STRING(sysfontname << " " << in_size));
         ret = Gdk::GL::Font::use_pango_font(*font_desc, 0, 128, list_start);
+        fprintf(stderr, "Font: (3) pango %s\n", ret ? "success" : "failure");
+      }
+      else {
+        fprintf(stderr, "Font: (3) default system font not found, cannot try\n");
       }
     }
 
@@ -82,6 +98,8 @@ TextWriter::TextWriter(int in_x, int in_y, Renderer &in_renderer,
 
     font_size_lookup[size] = list_start;
     font_lookup[size] = font_desc;
+
+    fprintf(stderr, "--- [/New Font]\n\n");
   }
 }
 
@@ -158,6 +176,8 @@ const std::string get_default_font()
 {
   std::string returnedFont;
 
+  fprintf(stderr, "Fontconfig: identify a default system font\n");
+
   FcResult fcres;
   FcConfig *config = FcInitLoadConfigAndFonts();
 
@@ -167,13 +187,23 @@ const std::string get_default_font()
   FcPattern *match = FcFontMatch(config, pattern, &fcres);
 
   FcChar8 *family = NULL;
-  if (fcres == FcResultMatch)
+  if (fcres == FcResultMatch) {
     fcres = FcPatternGetString(match, FC_FAMILY, 0, &family);
-  if (fcres == FcResultMatch)
-    returnedFont = (char *)family;
+    if (fcres == FcResultMatch)
+      returnedFont = (char *)family;
+    else
+      fprintf(stderr, "Fontconfig: could not get the font family for this match\n");
+  }
+  else
+    fprintf(stderr, "Fontconfig: the pattern did not match (1)\n");
 
   FcPatternDestroy(pattern);
   FcConfigDestroy(config);
+
+  if (returnedFont.empty())
+    fprintf(stderr, "Fontconfig: could not identify\n");
+  else
+    fprintf(stderr, "Fontconfig: found `%s`\n", family);
 
   return returnedFont;
 }
